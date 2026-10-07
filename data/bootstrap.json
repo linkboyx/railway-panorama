@@ -1,0 +1,9 @@
+{
+  "tag": "data-bootstrap-v1",
+  "asset": "railway-raw-seed.tar.gz",
+  "sha256": "cdeb43a3575a8206d61fb292d6810b26a94fe1614b91f81e8a7a1f3a49e14036",
+  "bytes": 34667552,
+  "createdAt": "2026-10-07T14:44:31.313Z",
+  "osmSnapshot": "2026-09-24",
+  "description": "Public OSM and 12306 bootstrap cache for scheduled updates"
+}

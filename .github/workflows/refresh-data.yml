@@ -1,0 +1,87 @@
+name: Refresh railway data
+
+on:
+  schedule:
+    # 07:17 Asia/Shanghai, away from the top of the hour.
+    - cron: '17 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Restore raw data cache
+        id: cache
+        uses: actions/cache/restore@v5
+        with:
+          path: data/raw
+          key: railway-raw-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: railway-raw-v1-
+      - name: Bootstrap missing raw data
+        id: bootstrap
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f data/raw/osm/meta.json ] || [ ! -f data/raw/12306/stations.json ]; then
+            mkdir -p "$RUNNER_TEMP/railway-bootstrap" data
+            gh release download data-bootstrap-v1 --pattern railway-raw-seed.tar.gz --dir "$RUNNER_TEMP/railway-bootstrap"
+            node scripts/tools/verify-bootstrap.mjs "$RUNNER_TEMP/railway-bootstrap/railway-raw-seed.tar.gz"
+            tar -xzf "$RUNNER_TEMP/railway-bootstrap/railway-raw-seed.tar.gz" -C data
+          fi
+      - name: Check direct access to 12306
+        run: node --no-use-env-proxy scripts/tools/probe-12306.mjs
+      - name: Refresh and validate today's data
+        timeout-minutes: 150
+        run: node scripts/update-data.mjs --days 1 --interval 3000 --search-concurrency 1
+      - name: Prune expired raw cache
+        run: node scripts/tools/prune-12306.mjs
+      - name: Save cache and partial progress
+        if: ${{ always() && !cancelled() && steps.bootstrap.outcome == 'success' }}
+        uses: actions/cache/save@v5
+        with:
+          path: data/raw
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - name: Commit validated snapshot
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/data
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh railway data $(TZ=Asia/Shanghai date +%F)"
+            git push origin HEAD:main
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Record published dataset
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("web/data/meta.json")); const p="data/raw/12306/timetable-failed.json"; const f=fs.existsSync(p) ? JSON.parse(fs.readFileSync(p)).filter(x=>x.date===m.dates.at(-1)) : []; fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Latest timetable date: ${m.dates.at(-1)}\n\nGenerated: ${m.generatedAt}\n\nTrains: ${m.counts.trains}; stations: ${m.counts.stations}\n\nUnavailable timetables: ${f.map(x=>x.code).join(", ") || "none"}\n`);'
+
+  deploy:
+    needs: refresh
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
+    with:
+      ref: ${{ needs.refresh.outputs.sha }}

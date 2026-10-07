@@ -9,19 +9,25 @@ const env = { ...process.env, NODE_USE_ENV_PROXY: '0' };
 for (const key of Object.keys(env)) {
   if (/^(https?|all)_proxy$/i.test(key)) delete env[key];
 }
-const options = parseArgs(process.argv.slice(2), { start: todayCST(), days: '7' });
+const options = parseArgs(process.argv.slice(2), { start: todayCST(), days: '7', interval: '1000', searchConcurrency: '2' });
 const days = Number(options.days);
 if (!Number.isInteger(days) || days < 1 || days > 14 || !/^\d{4}-\d{2}-\d{2}$/.test(options.start)) {
   console.error('请使用有效的 --start YYYY-MM-DD 与 --days 1..14。');
   process.exit(1);
 }
 const start = options.start;
+const interval = Number(options.interval);
+const searchConcurrency = Number(options.searchConcurrency);
+if (!Number.isInteger(interval) || interval < 400 || interval > 10000 || ![1, 2].includes(searchConcurrency)) {
+  console.error('--interval 必须为 400..10000 毫秒，--search-concurrency 必须为 1 或 2。');
+  process.exit(1);
+}
 const directArgs = Number(process.versions.node.split('.')[0]) >= 24 ? ['--no-use-env-proxy'] : [];
 const backupRoot = path.join(ROOT, 'data/backups');
 fs.mkdirSync(backupRoot, { recursive: true });
 const stage = fs.mkdtempSync(path.join(backupRoot, 'update-'));
 const steps = [
-  ['scripts/fetch-12306.mjs', '--start', start, '--days', String(days), '--interval', '1000'],
+  ['scripts/fetch-12306.mjs', '--start', start, '--days', String(days), '--interval', String(interval), '--search-concurrency', String(searchConcurrency)],
   ['scripts/tools/check-update.mjs', '--start', start, '--days', String(days)],
   ['--max-old-space-size=6144', 'scripts/build.mjs', '--out', stage, '--report', path.join(stage, 'build-report.json')],
   ['scripts/tools/check-data.mjs', '--data', stage],
