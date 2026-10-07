@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Reject incomplete daily lists before replacing the website's existing snapshot.
 import path from 'node:path';
-import { ROOT, dateRange, todayCST, exists, readJSON } from '../lib/util.mjs';
+import { ROOT, dateRange, todayCST, exists, readJSON, parseArgs } from '../lib/util.mjs';
 
 const dir = path.join(ROOT, 'data/raw/12306/trains');
+const args = parseArgs(process.argv.slice(2), { start: todayCST() });
 const errors = [];
-for (const date of dateRange(todayCST(), 7)) {
+for (const date of dateRange(args.start, 7)) {
   const file = path.join(dir, `${date}.json`);
   if (!exists(file)) {
     errors.push(`${date}：尚未抓取完成`);

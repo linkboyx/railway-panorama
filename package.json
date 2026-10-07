@@ -15,7 +15,7 @@
     "fetch": "npm run fetch:osm && npm run fetch:12306",
     "build": "node --max-old-space-size=6144 scripts/build.mjs",
     "check": "node scripts/tools/check-data.mjs",
-    "update:data": "node scripts/fetch-12306.mjs --interval 1000 && node scripts/tools/check-update.mjs && node --max-old-space-size=6144 scripts/build.mjs && node scripts/tools/check-data.mjs",
+    "update:data": "node scripts/update-data.mjs",
     "demo": "node scripts/demo.mjs",
     "mock:generate": "node scripts/mock/generate.mjs",
     "mock:server": "node scripts/mock/server.mjs"
