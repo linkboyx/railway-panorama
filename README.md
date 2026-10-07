@@ -85,6 +85,9 @@ node scripts/tools/check-osm.mjs                    # 只检查 OSM 路网：连
 
 ```bash
 npm run update:data
+
+# 只更新今天并校验
+npm run update:data -- --days 1
 ```
 
 经停时刻按 `train_no` 缓存，时刻不变的车次不会重复抓取，更新通常只需几分钟。铁路线变化较慢，偶尔 `npm run fetch:osm -- --force` 即可。

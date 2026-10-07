@@ -1,22 +1,29 @@
 #!/usr/bin/env node
 // Run the refresh pipeline with an explicitly direct network connection.
 import { spawnSync } from 'node:child_process';
-import { ROOT, todayCST } from './lib/util.mjs';
+import { ROOT, todayCST, parseArgs } from './lib/util.mjs';
 
 const env = { ...process.env, NODE_USE_ENV_PROXY: '0' };
 for (const key of Object.keys(env)) {
   if (/^(https?|all)_proxy$/i.test(key)) delete env[key];
 }
-const start = todayCST();
+const options = parseArgs(process.argv.slice(2), { start: todayCST(), days: '7' });
+const days = Number(options.days);
+if (!Number.isInteger(days) || days < 1 || days > 14 || !/^\d{4}-\d{2}-\d{2}$/.test(options.start)) {
+  console.error('请使用有效的 --start YYYY-MM-DD 与 --days 1..14。');
+  process.exit(1);
+}
+const start = options.start;
+const directArgs = Number(process.versions.node.split('.')[0]) >= 24 ? ['--no-use-env-proxy'] : [];
 const steps = [
-  ['scripts/fetch-12306.mjs', '--start', start, '--days', '7', '--interval', '1000'],
-  ['scripts/tools/check-update.mjs', '--start', start],
+  ['scripts/fetch-12306.mjs', '--start', start, '--days', String(days), '--interval', '1000'],
+  ['scripts/tools/check-update.mjs', '--start', start, '--days', String(days)],
   ['--max-old-space-size=6144', 'scripts/build.mjs'],
   ['scripts/tools/check-data.mjs'],
 ];
-console.log('无代理更新：抓取 7 天车次 → 检查完整性 → 构建 → 校验。');
+console.log(`无代理更新：抓取 ${days} 天车次 → 检查完整性 → 构建 → 校验。`);
 for (const args of steps) {
-  const result = spawnSync(process.execPath, args, { cwd: ROOT, env, stdio: 'inherit' });
+  const result = spawnSync(process.execPath, [...directArgs, ...args], { cwd: ROOT, env, stdio: 'inherit' });
   if (result.error) console.error(result.error.message);
   if (result.status !== 0) process.exit(result.status || 1);
 }
