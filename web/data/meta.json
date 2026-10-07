@@ -1,14 +1,15 @@
 {
   "version": 1,
   "source": "real",
-  "generatedAt": "2026-10-07T21:48:38.920Z",
+  "generatedAt": "2026-10-07T23:08:19.490Z",
   "timezone": "Asia/Shanghai",
   "dates": [
     "2026-10-08",
     "2026-10-09",
     "2026-10-10",
     "2026-10-11",
-    "2026-10-12"
+    "2026-10-12",
+    "2026-10-13"
   ],
   "osmBase": "2026-09-24T15:40:41Z",
   "bbox": [
@@ -62,10 +63,10 @@
     }
   ],
   "counts": {
-    "trains": 14840,
-    "drawable": 14840,
-    "stations": 3303,
+    "trains": 15117,
+    "drawable": 15117,
+    "stations": 3304,
     "edges": 72196,
-    "segments": 13484
+    "segments": 13507
   }
 }
