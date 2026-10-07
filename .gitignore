@@ -1,0 +1,15 @@
+node_modules/
+data/raw/
+data/raw-demo/
+data/mock/
+data/build-report*.json
+*.tmp
+.DS_Store
+
+# Local notes, generated screenshots, logs and credentials
+Claude outputs/
+data/backups/
+*.log
+.env
+.env.*
+!.env.example

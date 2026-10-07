@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>中国铁路全景 · 列车运行地图</title>
+  <meta name="description" content="在中国铁路网地图上查看任意时刻全部旅客列车的位置，查询车次并回放运行过程。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1a2c'/%3E%3Cpath d='M12 44 C24 30 38 26 52 20' stroke='%234fb6ff' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='38' cy='26' r='7' fill='%23ff4d4f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    try { const t = localStorage.getItem('rp-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/deck.min.js"></script>
+</head>
+<body>
+  <div id="map" aria-label="铁路地图"></div>
+
+  <header id="topbar" class="card">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--logo-bg)"/><path d="M10 46 C24 30 38 26 54 19" stroke="var(--rail-hsr)" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M10 54 C26 42 40 40 54 33" stroke="var(--muted)" stroke-width="3" fill="none" stroke-linecap="round" opacity=".6"/><circle cx="37" cy="27" r="7" fill="#ff4d4f"/></svg>
+      <div class="brand-text">
+        <h1>中国铁路全景</h1>
+        <div id="data-badge" class="sub">加载中…</div>
+      </div>
+    </div>
+    <div class="search-row">
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="车次、车站，或“北京到上海”" autocomplete="off" spellcheck="false" aria-label="搜索车次或车站">
+        <div id="search-results" class="dropdown" role="listbox"></div>
+      </div>
+      <button id="btn-od" class="od-open" type="button" title="站到站查询：两站（或两个城市）之间的车次与中转方案">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h13M14 4l4 4-4 4M19 16H6M10 12l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>站到站</span></button>
+    </div>
+  </header>
+
+  <aside id="stats" class="card">
+    <div class="stat-main"><span id="stat-total">0</span><span class="unit">列在途</span></div>
+    <div id="stat-classes" class="class-list"></div>
+    <div id="legend-lines" class="legend-lines"></div>
+    <div class="tools">
+      <label class="switch"><input type="checkbox" id="opt-traffic"><span>按车流量着色线路</span></label>
+      <label class="switch"><input type="checkbox" id="opt-labels" checked><span>显示车次号</span></label>
+      <div class="tool-links"><button id="btn-theme" class="link-btn" type="button">切换浅色</button><button id="btn-about" class="link-btn" type="button">关于数据</button></div>
+    </div>
+  </aside>
+
+  <aside id="panel" class="card hidden" aria-live="polite"></aside>
+
+  <footer id="timebar" class="card">
+    <div class="tb-row">
+      <button id="btn-back" class="icon-btn" type="button" title="后退 1 小时（Shift+←）" aria-label="后退1小时">
+        <svg viewBox="0 0 24 24"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button id="btn-play" class="icon-btn primary" type="button" title="播放/暂停（空格）" aria-label="播放或暂停">
+        <svg id="ico-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        <svg id="ico-play" viewBox="0 0 24 24" class="hidden"><path d="M7 5l12 7-12 7z"/></svg></button>
+      <button id="btn-fwd" class="icon-btn" type="button" title="前进 1 小时（Shift+→）" aria-label="前进1小时">
+        <svg viewBox="0 0 24 24"><path d="M13 6l6 6-6 6M5 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="clock">
+        <div id="clock-time">--:--:--</div>
+        <div id="clock-date">----</div>
+      </div>
+      <button id="btn-now" class="pill live" type="button" title="回到当前时间">实时</button>
+      <div id="speeds" class="speeds" role="group" aria-label="播放速度"></div>
+      <div class="dt-inputs">
+        <input id="in-date" type="date" aria-label="日期">
+        <input id="in-time" type="time" step="60" aria-label="时间">
+      </div>
+    </div>
+    <div class="tb-row slider-row">
+      <input id="slider" type="range" min="0" max="1439" step="1" aria-label="一天中的时间">
+      <div class="ticks"><span>0:00</span><span>6:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+    </div>
+  </footer>
+
+  <div id="about" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
+    <div class="modal-card">
+      <button class="p-close" type="button" data-close aria-label="关闭">×</button>
+      <h2 id="about-title">关于数据</h2>
+      <div id="about-body"></div>
+    </div>
+  </div>
+  <div id="tooltip" class="tooltip hidden"></div>
+  <div id="toast" class="toast hidden"></div>
+  <div id="loading">
+    <div class="spinner"></div>
+    <div id="loading-text">正在加载数据…</div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

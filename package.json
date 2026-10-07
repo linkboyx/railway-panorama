@@ -1,0 +1,23 @@
+{
+  "name": "railway-panorama",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "中国铁路全景：在可缩放的中国铁路网地图上显示任意时刻全部旅客列车的位置，支持车次查询与运行回放",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "diagnose": "node scripts/diagnose.mjs",
+    "fetch:osm": "node scripts/fetch-osm.mjs",
+    "fetch:12306": "node scripts/fetch-12306.mjs",
+    "fetch": "npm run fetch:osm && npm run fetch:12306",
+    "build": "node --max-old-space-size=6144 scripts/build.mjs",
+    "check": "node scripts/tools/check-data.mjs",
+    "update:data": "node scripts/fetch-12306.mjs --interval 1000 && node --max-old-space-size=6144 scripts/build.mjs && node scripts/tools/check-data.mjs",
+    "demo": "node scripts/demo.mjs",
+    "mock:generate": "node scripts/mock/generate.mjs",
+    "mock:server": "node scripts/mock/server.mjs"
+  }
+}
