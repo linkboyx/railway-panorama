@@ -36,6 +36,7 @@ const args = parseArgs(process.argv.slice(2), {
   concurrency: '2',
   interval: '400',      // 最小请求间隔（毫秒）；被限流时会自动加大
   searchConcurrency: '2',
+  retryMissing: '',    // daily: retry unavailable timetables once per Beijing date
   breakMs: '60000',     // 连续失败后的首次暂停时长（毫秒），反复触发时加倍，最长 10 分钟
   maxInterval: '10000', // 被限流时请求间隔最多放慢到多少毫秒
   kyfw: process.env.KYFW_BASE || 'https://kyfw.12306.cn',
@@ -260,6 +261,9 @@ async function fetchTrainLists() {
 // ---------------- 3. 经停时刻 ----------------
 async function fetchTimetables(lists, stations) {
   const dir = path.join(OUT, 'timetable');
+  const retryFile = path.join(OUT, 'timetable-retries.json');
+  const dailyRetry = args.retryMissing === 'daily';
+  const retryLedger = dailyRetry && exists(retryFile) ? readJSON(retryFile) : {};
   fs.mkdirSync(dir, { recursive: true });
   const teleByName = new Map(stations.map((s) => [s.name, s.tele]));
   // 每个 train_no 取第一个开行日期
@@ -288,10 +292,11 @@ async function fetchTimetables(lists, stations) {
   }
   let todo = [...jobs.values()].filter((j) => !exists(path.join(dir, timetableFileName(j.no))));
   const have = jobs.size - todo.length;
+  if (dailyRetry) todo = todo.filter(j => retryLedger[j.no] !== todayCST());
   // 先抓最早一天开行的车次（覆盖了大部分每日开行的车次），中途就可以先 npm run build 预览
   todo.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : naturalCompare(a.code, b.code)));
   if (args.sample) todo = todo.slice(0, Number(args.sample));
-  log(`经停时刻：共 ${jobs.size} 个 train_no，已有 ${have} 个，本次抓取 ${todo.length} 个`);
+  log(`经停时刻：共 ${jobs.size} 个 train_no，已有 ${have} 个，本次抓取 ${todo.length} 个（按 train_no 复用缓存）`);
   if (!todo.length) return;
   await initSession();
   const prog = new Progress('经停时刻', todo.length);
@@ -324,6 +329,10 @@ async function fetchTimetables(lists, stations) {
     }
     // 最近 60 个车次里失败超过 80%：多半被限流或网络中断，停止以免长时间无效请求
     recent.push(!rows || rows.length < 2 ? 1 : 0);
+    if (dailyRetry && (!rows || rows.length < 2)) {
+      retryLedger[job.no] = todayCST();
+      writeJSON(retryFile, retryLedger);
+    }
     if (recent.length > 60) recent.shift();
     if (recent.length >= 60 && recent.reduce((x, y) => x + y, 0) >= 48) {
       throw new Error('最近的经停站请求大多失败，已停止（多半被 12306 限流）。请过一段时间再运行，或降低频率：--interval 1000。已抓到的数据会保留，重新运行会继续。');
@@ -333,6 +342,10 @@ async function fetchTimetables(lists, stations) {
         train_no: job.no, code: job.code, date: usedDate, from: job.from, to: job.to, source,
         fetchedAt: new Date().toISOString(), rows,
       });
+      if (dailyRetry && retryLedger[job.no]) {
+        delete retryLedger[job.no];
+        writeJSON(retryFile, retryLedger);
+      }
       prog.tick(true);
     } else {
       failed.push({ no: job.no, code: job.code, date: job.date });
@@ -354,7 +367,10 @@ async function main() {
   else {
     for (const d of DATES) {
       const f = path.join(OUT, 'trains', `${d}.json`);
-      if (exists(f)) lists[d] = readJSON(f).trains;
+      if (exists(f)) {
+        const list = readJSON(f);
+        if (!list.incomplete && !list.failedKeywords?.length && !list.truncatedKeywords?.length) lists[d] = list.trains;
+      }
     }
   }
   if (STEPS.has('timetable')) await fetchTimetables(lists, stations);

@@ -24,6 +24,7 @@ jobs:
       contents: write
     outputs:
       sha: ${{ steps.commit.outputs.sha }}
+      needs_continue: ${{ steps.refresh.outputs.needs_continue }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v6
@@ -51,13 +52,17 @@ jobs:
             node scripts/tools/verify-bootstrap.mjs "$RUNNER_TEMP/railway-bootstrap/railway-raw-seed.tar.gz"
             tar -xzf "$RUNNER_TEMP/railway-bootstrap/railway-raw-seed.tar.gz" -C data
           fi
+      - name: Test rolling window and cache behavior
+        run: npm run test:window
       - name: Check direct access to 12306
         run: node --no-use-env-proxy scripts/tools/probe-12306.mjs
-      - name: Refresh and validate today's data
+      - name: Fill one day and retry missing timetables
+        id: refresh
         timeout-minutes: 150
-        run: node scripts/update-data.mjs --days 1 --interval 3000 --search-concurrency 1
-      - name: Prune expired raw cache
-        run: node scripts/tools/prune-12306.mjs
+        run: node scripts/refresh-window.mjs --days 15 --interval 5000 --timetable-batch 300
+      - name: Prune old lists once the window is complete
+        if: steps.refresh.outputs.covered == '15'
+        run: node scripts/tools/prune-12306.mjs --start ${{ steps.refresh.outputs.window_start }} --days 15 --keep-timetables
       - name: Save cache and partial progress
         if: ${{ always() && !cancelled() && steps.bootstrap.outcome == 'success' }}
         uses: actions/cache/save@v5
@@ -75,9 +80,6 @@ jobs:
             git push origin HEAD:main
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Record published dataset
-        run: |
-          node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("web/data/meta.json")); const p="data/raw/12306/timetable-failed.json"; const f=fs.existsSync(p) ? JSON.parse(fs.readFileSync(p)).filter(x=>x.date===m.dates.at(-1)) : []; fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Latest timetable date: ${m.dates.at(-1)}\n\nGenerated: ${m.generatedAt}\n\nTrains: ${m.counts.trains}; stations: ${m.counts.stations}\n\nUnavailable timetables: ${f.map(x=>x.code).join(", ") || "none"}\n`);'
 
   deploy:
     needs: refresh
@@ -88,3 +90,19 @@ jobs:
     uses: ./.github/workflows/pages.yml
     with:
       ref: ${{ needs.refresh.outputs.sha }}
+
+  continue-backfill:
+    needs: [refresh, deploy]
+    if: needs.refresh.outputs.needs_continue == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Rest between batches
+        run: sleep 600
+      - name: Start the next small batch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run refresh-data.yml --ref main

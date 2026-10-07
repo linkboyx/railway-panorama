@@ -28,7 +28,9 @@ const args = parseArgs(process.argv.slice(2), {
   out: path.join(ROOT, 'web/data'),
   source: 'real',
   report: '',
-  maxDates: '14',
+  maxDates: '15',
+  dateStart: '',
+  dateEnd: '',
 });
 const RAW = path.resolve(args.raw);
 const OUT = path.resolve(args.out);
@@ -45,7 +47,7 @@ function main() {
   const router = new Router(graph, edgeIndex);
 
   // ---------- 2. 时刻与车站 ----------
-  const rail = loadRail(path.join(RAW, '12306'), { maxDates: Number(args.maxDates) });
+  const rail = loadRail(path.join(RAW, '12306'), { maxDates: Number(args.maxDates), dateStart: args.dateStart, dateEnd: args.dateEnd });
   const { trains, dates } = rail;
   const { stations, byName } = matchStations(rail.stationList, osm.stations, trains, { router, routingClassOf });
 

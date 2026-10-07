@@ -74,7 +74,7 @@ npm run fetch:osm -- --only stations                # 只下载车站
 npm run fetch:osm -- --force                        # 忽略已下载的分块，全部重下
 
 # 构建
-npm run build -- --max-dates 14                     # 最多使用最近 14 天的车次列表（默认）
+npm run build -- --max-dates 15                     # 最多使用最近 15 天的车次列表（默认）
 npm run check                                       # 用前端同一套代码自检每个车次在各站的位置
 node scripts/tools/check-osm.mjs                    # 只检查 OSM 路网：连通性、线路等级、主要干线里程（不需要 12306 数据）
 ```
@@ -96,13 +96,23 @@ npm run update:data -- --days 1
 
 ### GitHub 定时更新
 
-[Refresh railway data](https://github.com/linkboyx/railway-panorama/actions/workflows/refresh-data.yml) 每天北京时间 **07:17** 更新当天的车次列表，补抓缺少的经停时刻，构建并校验后自动提交 `web/data/`、发布 GitHub Pages。也可以在该页面点 **Run workflow** 手动运行，无需打开本地电脑或配置个人访问令牌。
+[Refresh railway data](https://github.com/linkboyx/railway-panorama/actions/workflows/refresh-data.yml) 维护**包含北京时间当天的未来 15 天**。每天 **07:17** 启动滚动更新；也可以在该页面点 **Run workflow** 手动运行，本地电脑无需开机。
 
-运行器使用 Node.js 24，直连 12306，搜索并发为 1、最小请求间隔 3 秒；先检查云端网络是否可用，抓取失败或列表不完整时停止，网站保留已发布快照。少数接口正常但无经停数据的车次会记录在运行摘要中。单次更新最多运行 150 分钟，中断进度保存到 Actions 缓存，下次继续。
+首次补齐或缓存缺失时，每次只补最早缺少的 **1 天车次列表**，并补抓最多 **300 个经停时刻**。每批使用单并发、约 **5 秒请求间隔**，校验通过才提交网站数据并发布 Pages；保存原始缓存后休息 **10 分钟**，仍有可补数据就自动启动下一批。日期窗口补齐后，日常运行通常只补新进入窗口的那一天，复用已有时刻缓存。初始化补齐耗时取决于新车次数量和接口限流，进度在每次运行摘要中显示。
 
-原始数据复用 Actions 缓存；缓存失效时下载 [公开初始化快照](https://github.com/linkboyx/railway-panorama/releases/tag/data-bootstrap-v1)，按 `data/bootstrap.json` 校验 SHA-256 后解压。初始化快照使用 2026-09-24 的 OSM 路网；定时任务只更新 12306 数据，保留最近 14 个已抓取日期。原始文件不会进入 Git 历史。
+已有完整日期列表和经停时刻不会重复请求。接口暂时不提供时刻的车次，同一个北京时间日期只尝试一轮，次日再试；失败车次不阻塞后面的补抓。列表不完整、构建或校验失败时保留网站现有快照，已取得的原始缓存会尝试保存，后续每日任务可续传。每批抓取步骤最多运行 150 分钟。初始化期间网站逐批显示已经完成的日期，摘要会标明尚未抓到的日期与时刻数量；不以车次列表存在代替经停时刻完整。
 
-机器人提交后直接调用 Pages 部署工作流，避免依赖 `GITHUB_TOKEN` 提交再次触发 push 工作流。GitHub 定时运行可能延迟；公共仓库连续 60 天没有活动时会停用定时任务，可在 Actions 页面重新启用。参见 [GitHub 定时事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+原始数据复用 Actions 缓存；缓存失效时下载 [公开初始化快照](https://github.com/linkboyx/railway-panorama/releases/tag/data-bootstrap-v1)，按 `data/bootstrap.json` 校验 SHA-256 后解压。初始化快照使用 2026-09-24 的 OSM 路网；定时任务只更新 12306 数据。补齐后清理窗口之外的每日车次列表，保留所有经停时刻缓存供以后复用，原始文件不会进入 Git 历史。
+
+机器人提交后直接调用 Pages 部署工作流。GitHub 定时运行可能延迟；公共仓库连续 60 天没有活动时会停用定时任务，可在 Actions 页面重新启用。参见 [GitHub 定时事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+
+本地可查看待补计划或执行同样的小批次：
+
+```bash
+npm run update:window -- --plan
+npm run update:window
+npm run test:window
+```
 
 ### 构建报告
 

@@ -2,11 +2,12 @@
 // Reject incomplete daily lists before replacing the website's existing snapshot.
 import path from 'node:path';
 import { ROOT, dateRange, todayCST, exists, readJSON, parseArgs } from '../lib/util.mjs';
+import { isCompleteList } from '../lib/window.mjs';
 
 const dir = path.join(ROOT, 'data/raw/12306/trains');
 const args = parseArgs(process.argv.slice(2), { start: todayCST(), days: '7' });
 const days = Number(args.days);
-if (!Number.isInteger(days) || days < 1 || days > 14) throw new Error('--days 必须为 1..14');
+if (!Number.isInteger(days) || days < 1 || days > 15) throw new Error('--days 必须为 1..15');
 const errors = [];
 for (const date of dateRange(args.start, days)) {
   const file = path.join(dir, `${date}.json`);
@@ -15,7 +16,7 @@ for (const date of dateRange(args.start, days)) {
     continue;
   }
   const list = readJSON(file);
-  if (list.date !== date || !list.trains?.length || list.incomplete || list.failedKeywords?.length || list.truncatedKeywords?.length) {
+  if (!isCompleteList(list, date)) {
     errors.push(`${date}：车次列表为空、日期不符或存在未完成的查询`);
   }
 }

@@ -11,8 +11,8 @@ for (const key of Object.keys(env)) {
 }
 const options = parseArgs(process.argv.slice(2), { start: todayCST(), days: '7', interval: '1000', searchConcurrency: '2' });
 const days = Number(options.days);
-if (!Number.isInteger(days) || days < 1 || days > 14 || !/^\d{4}-\d{2}-\d{2}$/.test(options.start)) {
-  console.error('请使用有效的 --start YYYY-MM-DD 与 --days 1..14。');
+if (!Number.isInteger(days) || days < 1 || days > 15 || !/^\d{4}-\d{2}-\d{2}$/.test(options.start)) {
+  console.error('请使用有效的 --start YYYY-MM-DD 与 --days 1..15。');
   process.exit(1);
 }
 const start = options.start;

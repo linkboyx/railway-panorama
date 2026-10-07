@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readJSON, log, warn, naturalCompare } from '../lib/util.mjs';
 import { parseTimetable, trainClassOf, normalizeName, timetableFileName } from '../lib/rail12306.mjs';
+import { isCompleteList } from '../lib/window.mjs';
 
-export function loadRail(dir, { maxDates = 14 } = {}) {
+export function loadRail(dir, { maxDates = 15, dateStart = '', dateEnd = '' } = {}) {
   const stFile = path.join(dir, 'stations.json');
   if (!fs.existsSync(stFile)) throw new Error(`没有找到车站表：${stFile}（请先运行 npm run fetch:12306）`);
   const stationList = readJSON(stFile);
@@ -15,11 +16,13 @@ export function loadRail(dir, { maxDates = 14 } = {}) {
   const listInfo = new Map(); // no -> {codes:Set, from, to}
   if (fs.existsSync(trainDir)) {
     // 只用最近 maxDates 天（多次抓取后旧日期会累积）
-    const files = fs.readdirSync(trainDir).filter((x) => /^\d{4}-\d{2}-\d{2}\.json$/.test(x)).sort().slice(-maxDates);
+    const files = fs.readdirSync(trainDir).filter((x) => /^\d{4}-\d{2}-\d{2}\.json$/.test(x) &&
+      (!dateStart || x.slice(0, 10) >= dateStart) && (!dateEnd || x.slice(0, 10) <= dateEnd)).sort().slice(-maxDates);
     for (const f of files) {
       const date = f.slice(0, 10);
-      const j = readJSON(path.join(trainDir, f));
-      if (!j.trains?.length) continue;
+      let j;
+      try { j = readJSON(path.join(trainDir, f)); } catch { warn(`${f} 缓存损坏，暂不纳入网站数据`); continue; }
+      if (!isCompleteList(j, date)) continue;
       dates.push(date);
       for (const t of j.trains) {
         if (!runDates.has(t.no)) runDates.set(t.no, new Set());
