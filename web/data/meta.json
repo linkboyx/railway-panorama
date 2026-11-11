@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "real",
-  "generatedAt": "2026-11-11T04:55:22.736Z",
+  "generatedAt": "2026-11-11T05:37:52.481Z",
   "timezone": "Asia/Shanghai",
   "dates": [
     "2026-11-11",
@@ -72,10 +72,10 @@
     }
   ],
   "counts": {
-    "trains": 13337,
-    "drawable": 13337,
+    "trains": 13637,
+    "drawable": 13637,
     "stations": 3299,
     "edges": 72196,
-    "segments": 13096
+    "segments": 13098
   }
 }
